@@ -112,6 +112,11 @@ static void set_acpuclk_L2_freq_foot_print(unsigned khz)
 
 #define STBY_KHZ		1
 
+#define MAX_VDD_SC 1300000 /* uV */
+#define MIN_VDD_SC 800000 /* uV */
+#define HFPLL_NOMINAL_VDD 1050000
+#define HFPLL_LOW_VDD 800000
+
 #define HFPLL_LOW_VDD_PLL_L_MAX	0x28
 
 #define SECCLKAGD		BIT(4)
@@ -1312,6 +1317,76 @@ out:
 
 	return rc;
 }
+
+
+
+ssize_t acpuclk_get_vdd_levels_str(char *buf, int isApp) {
+
+	int i, len = 0;
+
+	if (buf) {
+		mutex_lock(&driver_lock);
+
+	if (isApp == 0)
+{
+		for (i = 0; acpu_freq_tbl[i+1].speed.khz; i++)
+			len += sprintf(buf + len, "%8u: %8d\n", acpu_freq_tbl[i+1].speed.khz, acpu_freq_tbl[i+1].vdd_core );
+		}
+
+		mutex_unlock(&driver_lock);
+	}
+	return len;
+}
+
+void acpuclk_set_vdd(unsigned int khz, int vdd_uv) {
+
+	int i;
+	unsigned int new_vdd_uv;
+
+
+
+
+	mutex_lock(&driver_lock);
+
+	for (i = 0; acpu_freq_tbl[i+1].speed.khz; i++) {
+		if (khz == 0)
+			new_vdd_uv = min(max((acpu_freq_tbl[i+1].vdd_core + vdd_uv), (unsigned int)MIN_VDD_SC), (unsigned int)MAX_VDD_SC);
+		else if ( acpu_freq_tbl[i+1].speed.khz == khz)
+new_vdd_uv = min(max((unsigned int)vdd_uv, (unsigned int)MIN_VDD_SC), (unsigned int)MAX_VDD_SC);
+			else
+		continue;
+
+		acpu_freq_tbl[i+1].vdd_core = new_vdd_uv;
+	}
+
+	mutex_unlock(&driver_lock);
+}
+
+void acpuclk_UV_mV_table(int cnt, int vdd_uv[]) {
+
+	int i;
+	int j=0;
+	mutex_lock(&driver_lock);
+
+	if (vdd_uv[0] < vdd_uv[cnt-1])
+{
+		for (i = 0; i < cnt; i++) {
+	if ((vdd_uv[i]*1000) >= MIN_VDD_SC && (vdd_uv[i]*1000) <= MAX_VDD_SC)
+		acpu_freq_tbl[i+1].vdd_core = vdd_uv[i]*1000;
+		}
+	}
+	else
+{
+		j = cnt-1;
+	for (i = 0; i < cnt; i++) {
+		if ((vdd_uv[j]*1000) >= MIN_VDD_SC && (vdd_uv[j]*1000) <= MAX_VDD_SC)
+			acpu_freq_tbl[i+1].vdd_core = vdd_uv[j]*1000;
+				j--;
+		}
+	}
+	mutex_unlock(&driver_lock);
+}
+
 
 static void __cpuinit hfpll_init(struct scalable *sc, struct core_speed *tgt_s)
 {
