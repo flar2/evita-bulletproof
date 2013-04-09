@@ -3413,10 +3413,10 @@ redo:
 	ld_moved = 0;
 	if (busiest->nr_running > 1) {
 		env.flags |= LBF_ALL_PINNED;
-		env.load_move	= imbalance;
-		env.src_cpu	= busiest->cpu;
-		env.src_rq	= busiest;
-		env.loop_max	= min_t(unsigned long, sysctl_sched_nr_migrate, busiest->nr_running);
+		env.load_move = imbalance;
+		env.src_cpu   = busiest->cpu;
+		env.src_rq    = busiest;
+		env.loop_max  = min(sysctl_sched_nr_migrate, busiest->nr_running);
 
 more_balance:
 		local_irq_save(flags);
@@ -3703,15 +3703,20 @@ static inline void set_cpu_sd_state_busy(void)
 {
 	struct sched_domain *sd;
 	int cpu = smp_processor_id();
+	int clear = 0; 
 
 	if (!test_bit(NOHZ_IDLE, nohz_flags(cpu)))
 		return;
-	clear_bit(NOHZ_IDLE, nohz_flags(cpu));
-
+	
 	rcu_read_lock();
-	for_each_domain(cpu, sd)
+	for_each_domain(cpu, sd) {
 		atomic_inc(&sd->groups->sgp->nr_busy_cpus);
+		clear = 1; 
+	}
 	rcu_read_unlock();
+
+	if (likely(clear))
+    		clear_bit(NOHZ_IDLE, nohz_flags(cpu)); 
 }
 
 void set_cpu_sd_state_idle(void)
@@ -3841,14 +3846,15 @@ static void nohz_idle_balance(int this_cpu, enum cpu_idle_type idle)
 		if (need_resched())
 			break;
 
-		raw_spin_lock_irq(&this_rq->lock);
-		update_rq_clock(this_rq);
-		update_cpu_load(this_rq);
-		raw_spin_unlock_irq(&this_rq->lock);
+		rq = cpu_rq(balance_cpu);
+
+		raw_spin_lock_irq(&rq->lock);
+		update_rq_clock(rq);
+		update_idle_cpu_load(rq);
+		raw_spin_unlock_irq(&rq->lock);
 
 		rebalance_domains(balance_cpu, CPU_IDLE);
 
-		rq = cpu_rq(balance_cpu);
 		if (time_after(this_rq->next_balance, rq->next_balance))
 			this_rq->next_balance = rq->next_balance;
 	}
