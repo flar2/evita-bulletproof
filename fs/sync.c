@@ -12,6 +12,7 @@
 #include <linux/pagemap.h>
 #include <linux/quotaops.h>
 #include <linux/backing-dev.h>
+#include <linux/moduleparam.h>
 #include "internal.h"
 
 bool fsync_enabled = false;
